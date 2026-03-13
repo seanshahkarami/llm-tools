@@ -1,9 +1,8 @@
+#!/usr/bin/env python3
 import argparse
 import ollama
 from pathlib import Path
-import time
 import json
-from datetime import datetime, timezone
 import sys
 
 prompt = """You are a wildfire detection AI analyzing images from a fixed camera mounted 
@@ -107,21 +106,20 @@ Return your analysis as a JSON object with the following fields:
   than a missed fire
 """
 
-model = "qwen3.5:35b"
-
 parser = argparse.ArgumentParser()
+parser.add_argument("-m", "--model", default="qwen3.5:35b")
 parser.add_argument("images", type=Path, nargs="*")
 args = parser.parse_args()
 
+model: str = args.model
 images: list[Path] = args.images
 
 client = ollama.Client()
 
 for image in images:
     print(f"processing {image}...", file=sys.stderr)
-    timestamp = datetime.now(tz=timezone.utc)
-    start_time = time.monotonic()
-    response: ollama.ChatResponse = client.chat(
+
+    response = client.chat(
         model=model,
         messages=[
             {
@@ -131,13 +129,18 @@ for image in images:
             },
         ],
     )
-    end_time = time.monotonic()
-    chat_duration = end_time - start_time
+
     output = {
-        "timestamp": timestamp.isoformat(),
-        "duration": chat_duration,
+        "timestamp": response.created_at,
+        "load_duration": response.load_duration,
+        "eval_count": response.eval_count,
+        # convert from nanoseconds to seconds
+        "eval_duration": response.eval_duration / 1e9,
+        "prompt_eval_count": response.prompt_eval_count,
+        # convert from nanoseconds to seconds
+        "prompt_eval_duration": response.prompt_eval_duration / 1e9,
         "prompt": prompt,
-        "model": model,
+        "model": response.model,
         "image": str(image.absolute()),
         "output": response.message.content.strip(),
     }
